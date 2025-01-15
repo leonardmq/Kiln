@@ -11,6 +11,12 @@
 
 <div class="max-w-[800px]">
   <AppPage title="Edit Project" subtitle={project?.name}>
-    <EditProject {project} />
+    {#if project}
+      <EditProject project_initial={project} />
+    {:else}
+      <div class="w-full min-h-[50vh] flex justify-center items-center">
+        <div class="loading loading-spinner loading-lg"></div>
+      </div>
+    {/if}
   </AppPage>
 </div>

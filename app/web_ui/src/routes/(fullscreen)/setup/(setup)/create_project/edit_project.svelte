@@ -12,6 +12,10 @@
   let importing = false
   onMount(() => {
     importing = $page.url.searchParams.get("import") === "true"
+
+    if (project_initial) {
+      set_project(project_initial)
+    }
   })
 
   export let created = false
@@ -19,17 +23,33 @@
   export let redirect_on_created: string | null = null
 
   // New project if no project is provided
-  export let project: Project = {
+  export let project_initial: Project = {
     v: 1,
     name: "",
     description: "",
   }
+  let project_draft: Project = { ...project_initial }
   let error: KilnError | null = null
   let submitting = false
   let saved = false
 
-  $: warn_before_unload =
-    !saved && [project?.name, project?.description].some((value) => !!value)
+  $: has_unsaved_changes = () => {
+    const fields_watched: (keyof Project)[] = ["name", "description"]
+
+    if (project_draft?.id) {
+      return fields_watched.some(
+        (field) => project_draft[field] !== project_initial[field],
+      )
+    }
+
+    return !saved && fields_watched.some((field) => !!project_draft[field])
+  }
+
+  $: warn_before_unload = has_unsaved_changes()
+
+  export function set_project(project: Project) {
+    project_draft = { ...project }
+  }
 
   function redirect_to_project(project_id: string) {
     goto(redirect_on_created + "/" + project_id)
@@ -39,18 +59,18 @@
     try {
       saved = false
       submitting = true
-      if (!project?.name) {
+      if (!project_draft?.name) {
         throw new Error("Project name is required")
       }
       let data: Project | undefined = undefined
       let error: unknown | undefined = undefined
       // only send the fields that are being updated in the UI
       let body = {
-        name: project.name,
-        description: project.description,
+        name: project_draft.name,
+        description: project_draft.description,
       }
-      let create = !project.id
-      if (!project.id /* create, but ts wants this check */) {
+      let create = !project_draft.id
+      if (!project_draft.id /* create, but ts wants this check */) {
         const { data: post_data, error: post_error } = await client.POST(
           "/api/project",
           {
@@ -66,7 +86,7 @@
           {
             params: {
               path: {
-                project_id: project.id,
+                project_id: project_draft.id,
               },
             },
             // @ts-expect-error Patching only takes some fields
@@ -141,7 +161,7 @@
   {#if !created}
     {#if !importing}
       <FormContainer
-        submit_label={project.id ? "Update Project" : "Create Project"}
+        submit_label={project_draft.id ? "Update Project" : "Create Project"}
         on:submit={save_project}
         bind:warn_before_unload
         bind:submitting
@@ -152,7 +172,7 @@
           label="Project Name"
           id="project_name"
           inputType="input"
-          bind:value={project.name}
+          bind:value={project_draft.name}
           max_length={120}
         />
         <FormElement
@@ -160,10 +180,10 @@
           id="project_description"
           inputType="textarea"
           optional={true}
-          bind:value={project.description}
+          bind:value={project_draft.description}
         />
       </FormContainer>
-      {#if !project.id}
+      {#if !project_draft.id}
         <p class="mt-4 text-center">
           Or
           <button class="link font-bold" on:click={() => (importing = true)}>
@@ -204,7 +224,7 @@
     {:else}
       <h2 class="text-xl font-medium text-center">Project Created!</h2>
       <p class="text-sm text-center">
-        Your new project "{project.name}" has been created.
+        Your new project "{project_draft.name}" has been created.
       </p>
     {/if}
   {/if}

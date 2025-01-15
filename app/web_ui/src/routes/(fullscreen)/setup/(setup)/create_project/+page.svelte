@@ -1,16 +1,14 @@
 <script lang="ts">
   import EditProject from "./edit_project.svelte"
-  import { type Project } from "$lib/types"
 
-  let project: Project = {
-    v: 1,
-    name: "",
-    description: "",
-  }
+  let formRef: EditProject | null = null
 
-  function example_project() {
-    project.name = "Example Project"
-    project.description = "This is an example project just to try things out."
+  const set_example_project = () => {
+    formRef?.set_project({
+      v: 1,
+      name: "Example Project",
+      description: "This is an example project just to try things out.",
+    })
   }
 </script>
 
@@ -26,7 +24,7 @@
 </h3>
 <h3 class="text-sm text-center mt-1 max-w-[600px] mx-auto">
   Just exploring?
-  <button class="link text-primary" on:click={example_project}
+  <button class="link text-primary" on:click={set_example_project}
     >Create an example</button
   >
 </h3>
@@ -34,7 +32,7 @@
 <div
   class="flex-none min-h-[50vh] py-8 px-4 h-full flex flex-col py-18 mx-auto w-full max-w-[500px]"
 >
-  <EditProject redirect_on_created="/setup/create_task" bind:project />
+  <EditProject redirect_on_created="/setup/create_task" bind:this={formRef} />
 </div>
 
 <div class="grow-[1.5]"></div>
