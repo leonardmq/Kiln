@@ -581,8 +581,7 @@ built_in_models: List[KilnModel] = [
             ),
             KilnModelProvider(
                 name=ModelProviderName.fireworks_ai,
-                # Finetuning not live yet
-                # provider_finetune_id="accounts/fireworks/models/llama-v3p3-70b-instruct",
+                provider_finetune_id="accounts/fireworks/models/llama-v3p3-70b-instruct",
                 supports_structured_output=True,
                 supports_data_gen=True,
                 provider_options={
