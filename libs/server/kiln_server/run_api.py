@@ -1,9 +1,17 @@
+import logging
+import tempfile
 from asyncio import Lock
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from kiln_ai.adapters.adapter_registry import adapter_for_task
+from kiln_ai.adapters.dataset_import import (
+    DatasetFileImporter,
+    DatasetImportFormat,
+    ImportConfig,
+)
 from kiln_ai.adapters.ml_model_list import ModelProviderName
 from kiln_ai.adapters.model_adapters.base_adapter import AdapterConfig
 from kiln_ai.datamodel import (
@@ -17,6 +25,8 @@ from kiln_ai.datamodel.basemodel import ID_TYPE
 from pydantic import BaseModel, ConfigDict
 
 from kiln_server.task_api import task_from_id
+
+logger = logging.getLogger(__name__)
 
 # Lock to prevent overwriting via concurrent updates. We use a load/update/write pattern that is not atomic.
 update_run_lock = Lock()
@@ -115,6 +125,12 @@ class RunSummary(BaseModel):
             model_name=model_name,
             input_source=run.input_source.type if run.input_source else None,
         )
+
+
+class BulkUploadResponse(BaseModel):
+    success: bool
+    filename: str
+    imported_count: int
 
 
 def run_from_id(project_id: str, task_id: str, run_id: str) -> TaskRun:
@@ -256,6 +272,48 @@ def connect_run_api(app: FastAPI):
                 },
             )
         return {"success": True}
+
+    @app.post("/api/projects/{project_id}/tasks/{task_id}/runs/bulk_upload")
+    async def bulk_upload(
+        project_id: str,
+        task_id: str,
+        dataset_type: DatasetImportFormat = Form(...),
+        file: UploadFile = File(...),
+    ) -> BulkUploadResponse:
+        task = task_from_id(project_id, task_id)
+
+        # store the file in temp directory
+        file_path = Path.joinpath(Path(tempfile.gettempdir()), file.filename)
+        with open(file_path, "wb") as f:
+            content = await file.read()
+            f.write(content)
+
+        imported_count = 0
+        try:
+            importer = DatasetFileImporter(
+                task,
+                ImportConfig(
+                    dataset_type=dataset_type,
+                    dataset_path=file_path,
+                    dataset_name=file.filename,
+                ),
+            )
+            imported_count = importer.create_runs_from_file()
+        except Exception as e:
+            logger.error(
+                f"Error processing {dataset_type}: {str(e)}",
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=f"Error processing {dataset_type}: {str(e)}",
+            )
+
+        return BulkUploadResponse(
+            success=True,
+            filename=file.filename,
+            imported_count=imported_count,
+        )
 
 
 async def update_run_util(
