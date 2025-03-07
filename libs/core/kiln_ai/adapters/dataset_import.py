@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Protocol
 
-from kiln_ai.datamodel import (DataSource, DataSourceType, Task, TaskOutput,
-                               TaskRun)
 from pydantic import BaseModel, Field, ValidationError, field_validator
+
+from kiln_ai.datamodel import DataSource, DataSourceType, Task, TaskOutput, TaskRun
 
 logger = logging.getLogger(__name__)
 
@@ -55,10 +55,10 @@ class CSVRowSchema(BaseModel):
         return value
 
 
-def generate_import_tags(dataset_name: str) -> list[str]:
+def generate_import_tags(session_id: str) -> list[str]:
     return [
         "imported",
-        f"imported_{int(time.time())}",
+        f"imported_{session_id}",
     ]
 
 
@@ -88,6 +88,7 @@ def create_task_run_from_csv_row(
     row: dict[str | Any, str | Any],
     dataset_name: str,
     row_number: int,
+    session_id: str,
 ) -> TaskRun:
     """Validate and create a TaskRun from a CSV row, without saving to file"""
 
@@ -102,7 +103,7 @@ def create_task_run_from_csv_row(
             row_number=row_number,
         ) from e
 
-    tags = generate_import_tags(dataset_name)
+    tags = generate_import_tags(session_id)
     if validated_row.tags:
         tags.extend(validated_row.tags)
 
@@ -149,6 +150,8 @@ def import_csv(task: Task, dataset_path: str, dataset_name: str) -> int:
 
     All rows are validated before any are persisted to files to avoid partial imports."""
 
+    session_id = int(time.time())
+
     required_headers = {"input", "output"}  # minimum required headers
     optional_headers = {"reasoning", "tags"}  # optional headers
 
@@ -181,10 +184,11 @@ def import_csv(task: Task, dataset_path: str, dataset_name: str) -> int:
         # enumeration starts at 2 because row 1 is headers
         for row_number, row in enumerate(reader, start=2):
             run = create_task_run_from_csv_row(
-                task,
-                row,
-                dataset_name,
-                row_number,
+                task=task,
+                row=row,
+                dataset_name=dataset_name,
+                row_number=row_number,
+                session_id=session_id,
             )
             rows.append(run)
 

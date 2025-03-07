@@ -1,5 +1,6 @@
 import logging
 import tempfile
+import time
 from asyncio import Lock
 from datetime import datetime
 from pathlib import Path
@@ -288,6 +289,8 @@ def connect_run_api(app: FastAPI):
         with open(file_path, "wb") as f:
             content = await file.read()
             f.write(content)
+
+        time.sleep(3)
 
         imported_count = 0
         try:
