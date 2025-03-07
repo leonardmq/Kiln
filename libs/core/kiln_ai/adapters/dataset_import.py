@@ -28,17 +28,27 @@ class DatasetFileImporter(Protocol):
 class CSVRowSchema(BaseModel):
     """Schema for validating rows in a CSV file."""
 
-    input: str  # The input to the model
-    output: str  # The output of the model
-    reasoning: str = Field(default=None)  # The reasoning of the model
-    tags: list[str] = Field(default_factory=list)  # The tags of the run
+    input: str = Field(description="The input to the model")
+    output: str = Field(description="The output of the model")
+    reasoning: str | None = Field(
+        description="The reasoning of the model (optional)",
+        default=None,
+    )
+    tags: list[str] = Field(
+        default_factory=list,
+        description="The tags of the run (optional)",
+    )
 
     @field_validator("tags", mode="before")
     def split_tags(cls, value):
-        # Tags are separated by commas in the CSV
-        if isinstance(value, str) and value:
-            return value.split(",")
-        return []
+        # Handle missing tags column or empty value
+        if not value:
+            return []
+        # Handle string values (comma-separated tags)
+        if isinstance(value, str):
+            tags = value.split(",")
+            return [tag.strip() for tag in tags if tag.strip()]
+        return value
 
 
 def import_csv(task: Task, dataset_path: str, dataset_name: str) -> int:
@@ -68,7 +78,9 @@ def import_csv(task: Task, dataset_path: str, dataset_name: str) -> int:
                 ),
                 intermediate_outputs={
                     "reasoning": validated_row.reasoning,
-                },
+                }
+                if validated_row.reasoning
+                else None,
                 tags=validated_row.tags,
             )
             run.save_to_file()

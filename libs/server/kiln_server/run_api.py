@@ -284,7 +284,7 @@ def connect_run_api(app: FastAPI):
 
         # store the file in temp directory
         file_path = Path.joinpath(Path(tempfile.gettempdir()), file.filename)
-        with open(file_path, "wb") as f:
+        with open(file_path, "wb", encoding="utf-8") as f:
             content = await file.read()
             f.write(content)
 
