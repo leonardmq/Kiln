@@ -169,6 +169,59 @@ def test_import_csv_plain_text(base_task: Task):
         compare_tags(run.tags, match["tags"])
 
 
+def test_import_csv_default_tags(base_task: Task):
+    row_data = [
+        {
+            "input": "This is my input",
+            "output": "This is my output 啊",
+            "tags": "t1,t2",
+        },
+        {
+            "input": "This is my input 4",
+            "output": "This is my output 4 啊",
+            "tags": "",
+        },
+    ]
+
+    file_path = dicts_to_file_as_csv(row_data, "test.csv")
+
+    importer = DatasetFileImporter(
+        base_task,
+        ImportConfig(
+            dataset_type=DatasetImportFormat.CSV,
+            dataset_path=file_path,
+            dataset_name="test.csv",
+        ),
+    )
+
+    importer.create_runs_from_file()
+
+    assert len(base_task.runs()) == 2
+
+    default_tags = 2
+
+    for run in base_task.runs():
+        # identify the row data with same input as the run
+        match = next(
+            (row for row in row_data if row["input"] == run.input),
+            None,
+        )
+
+        print("match", json.dumps(match, indent=2))
+
+        assert match is not None
+
+        if match["tags"]:
+            expected_tags = match["tags"].split(",")
+            assert len(run.tags) == len(expected_tags) + default_tags
+        else:
+            assert len(run.tags) == default_tags
+
+        # these are the default tags
+        assert "imported" in run.tags
+        assert any(tag.startswith("imported_") for tag in run.tags)
+
+
 def test_import_csv_plain_text_missing_output(base_task: Task):
     row_data = [
         {"input": "This is my input", "tags": "t1,t2"},
@@ -188,8 +241,12 @@ def test_import_csv_plain_text_missing_output(base_task: Task):
     )
 
     # check that the import raises an exception
-    with pytest.raises(KilnInvalidImportFormat):
+    with pytest.raises(KilnInvalidImportFormat) as e:
         importer.create_runs_from_file()
+
+    # no row number because the whole structure is invalid
+    assert e.value.row_number is None
+    assert "Missing required headers" in str(e.value)
 
 
 def test_import_csv_structured_output(task_with_structured_output: Task):
@@ -207,7 +264,7 @@ def test_import_csv_structured_output(task_with_structured_output: Task):
         {
             "input": "This is my input 3",
             "output": json.dumps({"sentiment": "neutral", "confidence": 0.5}),
-            "tags": "t5,t6",
+            "tags": "",
         },
     ]
 
@@ -243,18 +300,19 @@ def test_import_csv_structured_output_wrong_schema(task_with_structured_output: 
     row_data = [
         {
             "input": "This is my input",
-            "output": json.dumps({"sentiment": 90, "confidence": 0.95}),
+            "output": json.dumps({"sentiment": "positive", "confidence": 0.95}),
             "tags": "t1,t2",
         },
         {
             "input": "This is my input 2",
+            # the output is wrong because sentiment is not a string
             "output": json.dumps({"sentiment": 100, "confidence": 0.05}),
             "tags": "t3,t4",
         },
         {
             "input": "This is my input 3",
-            "output": json.dumps({"sentiment": 4, "confidence": 0.5}),
-            "tags": "t5,t6",
+            "output": json.dumps({"sentiment": "positive", "confidence": 0.5}),
+            "tags": "",
         },
     ]
 
@@ -270,8 +328,12 @@ def test_import_csv_structured_output_wrong_schema(task_with_structured_output: 
     )
 
     # check that the import raises an exception
-    with pytest.raises(KilnInvalidImportFormat):
+    with pytest.raises(KilnInvalidImportFormat) as e:
         importer.create_runs_from_file()
+
+    # the row number is +1 because of the header
+    assert e.value.row_number == 3
+    assert "Error in row 3: Validation failed" in str(e.value)
 
 
 def test_import_csv_structured_input_wrong_schema(task_with_structured_input: Task):
@@ -290,7 +352,7 @@ def test_import_csv_structured_input_wrong_schema(task_with_structured_input: Ta
         {
             "input": json.dumps({"example_id": 3, "text": "This is my input 3"}),
             "output": "This is my output 3",
-            "tags": "t5,t6",
+            "tags": "",
         },
     ]
 
@@ -306,8 +368,12 @@ def test_import_csv_structured_input_wrong_schema(task_with_structured_input: Ta
     )
 
     # check that the import raises an exception
-    with pytest.raises(KilnInvalidImportFormat):
+    with pytest.raises(KilnInvalidImportFormat) as e:
         importer.create_runs_from_file()
+
+    # the row number is +1 because of the header
+    assert e.value.row_number == 3
+    assert "Error in row 3: Validation failed" in str(e.value)
 
 
 def test_import_csv_intermediate_outputs(task_with_intermediate_outputs: Task):

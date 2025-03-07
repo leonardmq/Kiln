@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Protocol
 
+from kiln_ai.datamodel import (DataSource, DataSourceType, Task, TaskOutput,
+                               TaskRun)
 from pydantic import BaseModel, Field, ValidationError, field_validator
-
-from kiln_ai.datamodel import DataSource, DataSourceType, Task, TaskOutput, TaskRun
 
 logger = logging.getLogger(__name__)
 
