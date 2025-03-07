@@ -8,13 +8,9 @@ from io import StringIO
 from pathlib import Path
 
 import pytest
-
-from kiln_ai.adapters.dataset_import import (
-    DatasetFileImporter,
-    DatasetImportFormat,
-    ImportConfig,
-    KilnInvalidImportFormat,
-)
+from kiln_ai.adapters.dataset_import import (DatasetFileImporter,
+                                             DatasetImportFormat, ImportConfig,
+                                             KilnInvalidImportFormat)
 from kiln_ai.datamodel import Project, Task
 
 logger = logging.getLogger(__name__)
@@ -60,6 +56,22 @@ def task_with_structured_output(base_task: Task):
 
 
 @pytest.fixture
+def task_with_structured_input(base_task: Task):
+    base_task.input_json_schema = json.dumps(
+        {
+            "type": "object",
+            "properties": {
+                "example_id": {"type": "integer"},
+                "text": {"type": "string"},
+            },
+            "required": ["example_id", "text"],
+        }
+    )
+    base_task.save_to_file()
+    return base_task
+
+
+@pytest.fixture
 def task_with_intermediate_outputs(base_task: Task):
     for run in base_task.runs():
         run.intermediate_outputs = {"reasoning": "thinking output"}
@@ -73,6 +85,36 @@ def dict_to_csv_row(row: dict) -> str:
     writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
     writer.writerow(row.values())
     return output.getvalue().rstrip("\n")
+
+
+def dicts_to_file_as_csv(items: list[dict], file_name: str) -> str:
+    """Write a list of dictionaries to a CSV file with escaping and a header.
+
+    Returns the path to the file.
+    """
+    rows = [dict_to_csv_row(item) for item in items]
+    header = ",".join(f'"{key}"' for key in items[0].keys())
+    csv_data = f"{header}\n{'\n'.join(rows)}"
+
+    file_path = Path.joinpath(Path(tempfile.gettempdir()), file_name)
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(csv_data)
+
+    return file_path
+
+
+def compare_tags(actual_tags: list[str], expected_tags: list[str]):
+    """Compare the tags of a run to a list of tags.
+
+    Returns True if the run.tags contains all the tags in the list.
+    """
+    # the run.tags contain some extra default tags
+    if expected_tags:
+        tags_expected = expected_tags.split(",")
+    else:
+        tags_expected = []
+
+    assert all(tag in actual_tags for tag in tags_expected)
 
 
 def test_import_csv_plain_text(base_task: Task):
@@ -92,15 +134,14 @@ def test_import_csv_plain_text(base_task: Task):
             "output": "This is my output 3 啊",
             "tags": "t5",
         },
-        {"input": "This is my input 4", "output": "This is my output 4 啊", "tags": ""},
+        {
+            "input": "This is my input 4",
+            "output": "This is my output 4 啊",
+            "tags": "",
+        },
     ]
-    rows = [dict_to_csv_row(row) for row in row_data]
-    header = ",".join(f'"{key}"' for key in row_data[0].keys())
-    csv_data = f"{header}\n{'\n'.join(rows)}"
 
-    file_path = Path.joinpath(Path(tempfile.gettempdir()), "test.csv")
-    with open(file_path, "w") as f:
-        f.write(csv_data)
+    file_path = dicts_to_file_as_csv(row_data, "test.csv")
 
     importer = DatasetFileImporter(
         base_task,
@@ -125,8 +166,7 @@ def test_import_csv_plain_text(base_task: Task):
         assert run.input == match["input"]
         assert run.output.output == match["output"]
 
-        # the run.tags contain some extra default tags
-        assert all(tag in run.tags for tag in match["tags"].split(",") if tag != "")
+        compare_tags(run.tags, match["tags"])
 
 
 def test_import_csv_plain_text_missing_output(base_task: Task):
@@ -135,13 +175,8 @@ def test_import_csv_plain_text_missing_output(base_task: Task):
         {"input": "This is my input 2", "tags": "t3,t4"},
         {"input": "This is my input 3", "tags": "t5,t6"},
     ]
-    rows = [dict_to_csv_row(row) for row in row_data]
-    header = ",".join(f'"{key}"' for key in row_data[0].keys())
-    csv_data = f"{header}\n{'\n'.join(rows)}"
 
-    file_path = Path.joinpath(Path(tempfile.gettempdir()), "test.csv")
-    with open(file_path, "w") as f:
-        f.write(csv_data)
+    file_path = dicts_to_file_as_csv(row_data, "test.csv")
 
     importer = DatasetFileImporter(
         base_task,
@@ -175,13 +210,8 @@ def test_import_csv_structured_output(task_with_structured_output: Task):
             "tags": "t5,t6",
         },
     ]
-    rows = [dict_to_csv_row(row) for row in row_data]
-    header = ",".join(f'"{key}"' for key in row_data[0].keys())
-    csv_data = f"{header}\n{'\n'.join(rows)}"
 
-    file_path = Path.joinpath(Path(tempfile.gettempdir()), "test.csv")
-    with open(file_path, "w") as f:
-        f.write(csv_data)
+    file_path = dicts_to_file_as_csv(row_data, "test.csv")
 
     importer = DatasetFileImporter(
         task_with_structured_output,
@@ -206,8 +236,7 @@ def test_import_csv_structured_output(task_with_structured_output: Task):
         assert run.input == match["input"]
         assert json.loads(run.output.output) == json.loads(match["output"])
 
-        # the run.tags contain some extra default tags
-        assert all(tag in run.tags for tag in match["tags"].split(","))
+        compare_tags(run.tags, match["tags"])
 
 
 def test_import_csv_structured_output_wrong_schema(task_with_structured_output: Task):
@@ -228,16 +257,47 @@ def test_import_csv_structured_output_wrong_schema(task_with_structured_output: 
             "tags": "t5,t6",
         },
     ]
-    rows = [dict_to_csv_row(row) for row in row_data]
-    header = ",".join(f'"{key}"' for key in row_data[0].keys())
-    csv_data = f"{header}\n{'\n'.join(rows)}"
 
-    file_path = Path.joinpath(Path(tempfile.gettempdir()), "test.csv")
-    with open(file_path, "w") as f:
-        f.write(csv_data)
+    file_path = dicts_to_file_as_csv(row_data, "test.csv")
 
     importer = DatasetFileImporter(
         task_with_structured_output,
+        ImportConfig(
+            dataset_type=DatasetImportFormat.CSV,
+            dataset_path=file_path,
+            dataset_name="test.csv",
+        ),
+    )
+
+    # check that the import raises an exception
+    with pytest.raises(KilnInvalidImportFormat):
+        importer.create_runs_from_file()
+
+
+def test_import_csv_structured_input_wrong_schema(task_with_structured_input: Task):
+    row_data = [
+        {
+            # this one is missing example_id
+            "input": json.dumps({"example_id": 1, "text": "This is my input"}),
+            "output": "This is my output",
+            "tags": "t1,t2",
+        },
+        {
+            "input": json.dumps({"text": "This is my input 2"}),
+            "output": "This is my output 2",
+            "tags": "t3,t4",
+        },
+        {
+            "input": json.dumps({"example_id": 3, "text": "This is my input 3"}),
+            "output": "This is my output 3",
+            "tags": "t5,t6",
+        },
+    ]
+
+    file_path = dicts_to_file_as_csv(row_data, "test.csv")
+
+    importer = DatasetFileImporter(
+        task_with_structured_input,
         ImportConfig(
             dataset_type=DatasetImportFormat.CSV,
             dataset_path=file_path,
@@ -268,16 +328,11 @@ def test_import_csv_intermediate_outputs(task_with_intermediate_outputs: Task):
             "input": "This is my input 3",
             "output": "This is my output 3",
             "reasoning": "thinking output 3",
-            "tags": "t5,t6",
+            "tags": "",
         },
     ]
-    rows = [dict_to_csv_row(row) for row in row_data]
-    header = ",".join(f'"{key}"' for key in row_data[0].keys())
-    csv_data = f"{header}\n{'\n'.join(rows)}"
 
-    file_path = Path.joinpath(Path(tempfile.gettempdir()), "test.csv")
-    with open(file_path, "w") as f:
-        f.write(csv_data)
+    file_path = dicts_to_file_as_csv(row_data, "test.csv")
 
     importer = DatasetFileImporter(
         task_with_intermediate_outputs,
@@ -303,5 +358,4 @@ def test_import_csv_intermediate_outputs(task_with_intermediate_outputs: Task):
         assert run.output.output == match["output"]
         assert run.intermediate_outputs["reasoning"] == match["reasoning"]
 
-        # the run.tags contain some extra default tags
-        assert all(tag in run.tags for tag in match["tags"].split(","))
+        compare_tags(run.tags, match["tags"])
