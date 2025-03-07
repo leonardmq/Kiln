@@ -95,7 +95,7 @@ def create_task_run_from_csv_row(
     try:
         validated_row = CSVRowSchema(**row)
     except ValidationError as e:
-        logger.error(f"Invalid row {row_number}: {row}", exc_info=True)
+        logger.warning(f"Invalid row {row_number}: {row}", exc_info=True)
         human_readable = format_validation_error(e)
         raise KilnInvalidImportFormat(
             human_readable,
@@ -134,7 +134,7 @@ def create_task_run_from_csv_row(
             tags=tags,
         )
     except ValidationError as e:
-        logger.error(f"Invalid row {row_number}: {row}", exc_info=True)
+        logger.warning(f"Invalid row {row_number}: {row}", exc_info=True)
         human_readable = format_validation_error(e)
         raise KilnInvalidImportFormat(
             human_readable,

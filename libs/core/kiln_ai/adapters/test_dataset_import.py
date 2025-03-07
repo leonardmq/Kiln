@@ -13,6 +13,7 @@ from kiln_ai.adapters.dataset_import import (
     DatasetFileImporter,
     DatasetImportFormat,
     ImportConfig,
+    KilnInvalidImportFormat,
 )
 from kiln_ai.datamodel import Project, Task
 
@@ -124,10 +125,8 @@ def test_import_csv_plain_text(base_task: Task):
         assert run.input == match["input"]
         assert run.output.output == match["output"]
 
-        if match["tags"] == "":
-            assert run.tags == []
-        else:
-            assert run.tags == match["tags"].split(",")
+        # the run.tags contain some extra default tags
+        assert all(tag in run.tags for tag in match["tags"].split(",") if tag != "")
 
 
 def test_import_csv_plain_text_missing_output(base_task: Task):
@@ -154,7 +153,7 @@ def test_import_csv_plain_text_missing_output(base_task: Task):
     )
 
     # check that the import raises an exception
-    with pytest.raises(Exception):
+    with pytest.raises(KilnInvalidImportFormat):
         importer.create_runs_from_file()
 
 
@@ -206,7 +205,9 @@ def test_import_csv_structured_output(task_with_structured_output: Task):
         assert match is not None
         assert run.input == match["input"]
         assert json.loads(run.output.output) == json.loads(match["output"])
-        assert run.tags == match["tags"].split(",")
+
+        # the run.tags contain some extra default tags
+        assert all(tag in run.tags for tag in match["tags"].split(","))
 
 
 def test_import_csv_structured_output_wrong_schema(task_with_structured_output: Task):
@@ -245,7 +246,7 @@ def test_import_csv_structured_output_wrong_schema(task_with_structured_output: 
     )
 
     # check that the import raises an exception
-    with pytest.raises(Exception):
+    with pytest.raises(KilnInvalidImportFormat):
         importer.create_runs_from_file()
 
 
@@ -301,4 +302,6 @@ def test_import_csv_intermediate_outputs(task_with_intermediate_outputs: Task):
         assert run.input == match["input"]
         assert run.output.output == match["output"]
         assert run.intermediate_outputs["reasoning"] == match["reasoning"]
-        assert run.tags == match["tags"].split(",")
+
+        # the run.tags contain some extra default tags
+        assert all(tag in run.tags for tag in match["tags"].split(","))
