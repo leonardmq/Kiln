@@ -8,13 +8,9 @@ from io import StringIO
 from pathlib import Path
 
 import pytest
-
-from kiln_ai.adapters.dataset_import import (
-    DatasetFileImporter,
-    DatasetImportFormat,
-    ImportConfig,
-    KilnInvalidImportFormat,
-)
+from kiln_ai.adapters.dataset_import import (DatasetFileImporter,
+                                             DatasetImportFormat, ImportConfig,
+                                             KilnInvalidImportFormat)
 from kiln_ai.datamodel import Project, Task
 
 logger = logging.getLogger(__name__)
@@ -98,7 +94,7 @@ def dicts_to_file_as_csv(items: list[dict], file_name: str) -> str:
     """
     rows = [dict_to_csv_row(item) for item in items]
     header = ",".join(f'"{key}"' for key in items[0].keys())
-    csv_data = f"{header}\n{'\n'.join(rows)}"
+    csv_data = header + "\n" + "\n".join(rows)
 
     file_path = Path.joinpath(Path(tempfile.gettempdir()), file_name)
     with open(file_path, "w", encoding="utf-8") as f:
