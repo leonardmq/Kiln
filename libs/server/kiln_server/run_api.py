@@ -290,8 +290,6 @@ def connect_run_api(app: FastAPI):
             content = await file.read()
             f.write(content)
 
-        time.sleep(3)
-
         imported_count = 0
         try:
             importer = DatasetFileImporter(
