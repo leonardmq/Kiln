@@ -11,6 +11,7 @@ from kiln_ai.adapters.dataset_import import (
     DatasetFileImporter,
     DatasetImportFormat,
     ImportConfig,
+    KilnInvalidImportFormat,
 )
 from kiln_ai.adapters.ml_model_list import ModelProviderName
 from kiln_ai.adapters.model_adapters.base_adapter import AdapterConfig
@@ -284,7 +285,7 @@ def connect_run_api(app: FastAPI):
 
         # store the file in temp directory
         file_path = Path.joinpath(Path(tempfile.gettempdir()), file.filename)
-        with open(file_path, "wb", encoding="utf-8") as f:
+        with open(file_path, "wb") as f:
             content = await file.read()
             f.write(content)
 
@@ -299,6 +300,15 @@ def connect_run_api(app: FastAPI):
                 ),
             )
             imported_count = importer.create_runs_from_file()
+        except KilnInvalidImportFormat as e:
+            logger.error(
+                f"Invalid import format in {file.filename}: {str(e)}",
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=422,
+                detail=str(e),
+            )
         except Exception as e:
             logger.error(
                 f"Error processing {dataset_type}: {str(e)}",
