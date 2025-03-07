@@ -315,7 +315,7 @@ def connect_run_api(app: FastAPI):
                 exc_info=True,
             )
             raise HTTPException(
-                status_code=400,
+                status_code=500,
                 detail=f"Error processing {dataset_type}: {str(e)}",
             )
 
