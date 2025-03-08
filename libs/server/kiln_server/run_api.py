@@ -1,9 +1,8 @@
 import logging
+import os
 import tempfile
-import time
 from asyncio import Lock
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Dict
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -285,7 +284,11 @@ def connect_run_api(app: FastAPI):
         task = task_from_id(project_id, task_id)
 
         # store the file in temp directory
-        file_path = Path.joinpath(Path(tempfile.gettempdir()), file.filename)
+        file_name = file.filename if file.filename else "untitled"
+        file_path = os.path.join(
+            tempfile.gettempdir(),
+            file_name,
+        )
         with open(file_path, "wb") as f:
             content = await file.read()
             f.write(content)
@@ -297,13 +300,13 @@ def connect_run_api(app: FastAPI):
                 ImportConfig(
                     dataset_type=dataset_type,
                     dataset_path=file_path,
-                    dataset_name=file.filename,
+                    dataset_name=file_name,
                 ),
             )
             imported_count = importer.create_runs_from_file()
         except KilnInvalidImportFormat as e:
             logger.error(
-                f"Invalid import format in {file.filename}: {str(e)}",
+                f"Invalid import format in {file_name}: {str(e)}",
                 exc_info=True,
             )
             raise HTTPException(
@@ -322,7 +325,7 @@ def connect_run_api(app: FastAPI):
 
         return BulkUploadResponse(
             success=True,
-            filename=file.filename,
+            filename=file_name,
             imported_count=imported_count,
         )
 

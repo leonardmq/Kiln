@@ -3,7 +3,7 @@ import logging
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Dict, Protocol
+from typing import Dict, Protocol
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
@@ -20,12 +20,14 @@ class DatasetImportFormat(str, Enum):
     CSV = "csv"
 
 
-class DatasetFileImporter(Protocol):
+class Importer(Protocol):
     """Protocol for dataset importers"""
 
     def __call__(
         self,
+        task: Task,
         dataset_path: str,
+        dataset_name: str,
     ) -> int: ...
 
 
@@ -41,10 +43,11 @@ class CSVRowSchema(BaseModel):
     tags: list[str] = Field(
         default_factory=list,
         description="The tags of the run (optional)",
+        validate_default=True,
     )
 
     @field_validator("tags", mode="before")
-    def split_tags(cls, value):
+    def split_tags(cls, value: str | None) -> list[str]:
         # Handle missing tags column or empty value
         if not value:
             return []
@@ -52,7 +55,7 @@ class CSVRowSchema(BaseModel):
         if isinstance(value, str):
             tags = value.split(",")
             return [tag.strip() for tag in tags if tag.strip()]
-        return value
+        return []
 
 
 def generate_import_tags(session_id: str) -> list[str]:
@@ -85,7 +88,7 @@ def format_validation_error(e: ValidationError) -> str:
 
 def create_task_run_from_csv_row(
     task: Task,
-    row: dict[str | Any, str | Any],
+    row: dict[str, str],
     dataset_name: str,
     row_number: int,
     session_id: str,
@@ -94,7 +97,7 @@ def create_task_run_from_csv_row(
 
     # first we validate the row from the CSV file
     try:
-        validated_row = CSVRowSchema(**row)
+        validated_row = CSVRowSchema.model_validate(row)
     except ValidationError as e:
         logger.warning(f"Invalid row {row_number}: {row}", exc_info=True)
         human_readable = format_validation_error(e)
@@ -150,7 +153,7 @@ def import_csv(task: Task, dataset_path: str, dataset_name: str) -> int:
 
     All rows are validated before any are persisted to files to avoid partial imports."""
 
-    session_id = int(time.time())
+    session_id = str(int(time.time()))
 
     required_headers = {"input", "output"}  # minimum required headers
     optional_headers = {"reasoning", "tags"}  # optional headers
@@ -199,7 +202,7 @@ def import_csv(task: Task, dataset_path: str, dataset_name: str) -> int:
     return len(rows)
 
 
-DATASET_IMPORTERS: Dict[DatasetImportFormat, DatasetFileImporter] = {
+DATASET_IMPORTERS: Dict[DatasetImportFormat, Importer] = {
     DatasetImportFormat.CSV: import_csv,
 }
 

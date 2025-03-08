@@ -8,9 +8,13 @@ from io import StringIO
 from pathlib import Path
 
 import pytest
-from kiln_ai.adapters.dataset_import import (DatasetFileImporter,
-                                             DatasetImportFormat, ImportConfig,
-                                             KilnInvalidImportFormat)
+
+from kiln_ai.adapters.dataset_import import (
+    DatasetFileImporter,
+    DatasetImportFormat,
+    ImportConfig,
+    KilnInvalidImportFormat,
+)
 from kiln_ai.datamodel import Project, Task
 
 logger = logging.getLogger(__name__)
