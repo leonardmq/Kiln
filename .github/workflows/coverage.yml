@@ -29,8 +29,8 @@ jobs:
         run: uv sync --all-extras --dev
 
       # Remove this later: needed as server expects this dir to exist
-      - name: Mock Studio Web UI
-        run: mkdir -p ./app/web_ui/build && echo "test" > ./app/web_ui/build/index.html
+    #   - name: Mock Studio Web UI
+    #     run: mkdir -p ./app/web_ui/build && echo "test" > ./app/web_ui/build/index.html
 
       - name: Run coverage
         run: |
