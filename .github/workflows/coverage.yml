@@ -104,7 +104,6 @@ jobs:
 
             **Overall Coverage:** ${coveragePercentage || 'Unknown'}
 
-            ### Diff Coverage
             ${diffCoverageContent || 'No diff coverage data available'}
 
             📁 **Artifacts:**
