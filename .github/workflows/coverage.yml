@@ -1,0 +1,156 @@
+name: Coverage Report
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  coverage:
+    name: Generate Coverage Report
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Fetch full history for diff coverage analysis
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Install the project
+        run: uv sync --all-extras --dev
+
+      # Remove this later: needed as server expects this dir to exist
+      - name: Mock Studio Web UI
+        run: mkdir -p ./app/web_ui/build && echo "test" > ./app/web_ui/build/index.html
+
+      - name: Run coverage
+        run: |
+          uv run coverage run -m pytest
+          uv run coverage report
+          uv run coverage html
+          uv run coverage xml
+
+      - name: Upload coverage HTML report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-html
+          path: htmlcov/
+          retention-days: 30
+
+      - name: Upload coverage XML for analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-xml
+          path: coverage.xml
+          retention-days: 30
+
+      - name: Generate diff coverage report (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          # Generate diff coverage report
+          uv run diff-cover coverage.xml --compare-branch=origin/main --html-report diff-coverage.html --markdown-report diff-coverage.md
+          
+          # Also generate a fail-under report for potential future use
+          uv run diff-cover coverage.xml --compare-branch=origin/main --fail-under=80 || echo "Diff coverage below 80%"
+
+      - name: Upload diff coverage report
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: diff-coverage-report
+          path: |
+            diff-coverage.html
+            diff-coverage.md
+          retention-days: 30
+
+      - name: Comment PR with coverage info
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Read diff coverage markdown if it exists
+            let diffCoverageContent = '';
+            try {
+              diffCoverageContent = fs.readFileSync('diff-coverage.md', 'utf8');
+            } catch (error) {
+              console.log('No diff coverage report found');
+            }
+            
+            // Get overall coverage percentage
+            const { execSync } = require('child_process');
+            let coveragePercentage = '';
+            try {
+              const output = execSync('uv run coverage report --format=text', { encoding: 'utf8' });
+              const match = output.match(/TOTAL\s+\d+\s+\d+\s+(\d+%)/);
+              if (match) {
+                coveragePercentage = match[1];
+              }
+            } catch (error) {
+              console.log('Could not extract coverage percentage');
+            }
+
+            const body = `## 📊 Coverage Report
+
+            **Overall Coverage:** ${coveragePercentage || 'Unknown'}
+
+            ### Diff Coverage
+            ${diffCoverageContent || 'No diff coverage data available'}
+
+            📁 **Artifacts:**
+            - [HTML Coverage Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            - [Diff Coverage Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            <details>
+            <summary>How to download coverage reports</summary>
+
+            1. Go to the [Actions run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            2. Scroll down to "Artifacts" 
+            3. Download the coverage reports you need
+            </details>`;
+
+            // Find existing coverage comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existingComment = comments.find(comment => 
+              comment.body.includes('📊 Coverage Report')
+            );
+
+            if (existingComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: body
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+      - name: Coverage Summary
+        run: |
+          echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          uv run coverage report >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY 
