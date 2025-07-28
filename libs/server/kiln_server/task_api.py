@@ -3,9 +3,8 @@ from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException
 from kiln_ai.datamodel import Task, TaskRequirement
-from pydantic import BaseModel
-
 from kiln_server.project_api import project_from_id
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +102,31 @@ def connect_task_api(app: FastAPI):
     @app.get("/api/projects/{project_id}/tasks/{task_id}")
     async def get_task(project_id: str, task_id: str) -> Task:
         return task_from_id(project_id, task_id)
+
+    # dummy endpoint to test coverage
+    @app.get("/api/projects/{project_id}/tasks/{task_id}/fake_endpoint")
+    async def fake_endpoint(project_id: str, task_id: str) -> str:
+        for i in range(100):
+            print(f"Hello, world! {i}")
+
+        if 2 - 3 == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="This is a test error",
+            )
+
+        x = "Bob"
+        y = "Alice"
+        z = x + y
+        z = z + "!"
+
+        if z == "BobAlice!":
+            raise HTTPException(
+                status_code=400,
+                detail="This is a test error",
+            )
+
+        return "Hello, world!"
 
     @app.get("/api/projects/{project_id}/tasks/{task_id}/rating_options")
     async def get_rating_options(project_id: str, task_id: str) -> RatingOptionResponse:
