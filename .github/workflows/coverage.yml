@@ -41,6 +41,7 @@ jobs:
 
       - name: Upload coverage HTML report as artifact
         uses: actions/upload-artifact@v4
+        id: upload-html-coverage
         with:
           name: coverage-report-html
           path: htmlcov/
@@ -65,6 +66,7 @@ jobs:
       - name: Upload diff coverage report
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
+        id: upload-diff-coverage
         with:
           name: diff-coverage-report
           path: |
@@ -89,26 +91,31 @@ jobs:
               const lines = fullDiffCoverage.split('\n');
               const summaryLines = [];
               let inDetailedSection = false;
+              let detailedSectionLines = [];
               
               for (const line of lines) {
+
+                if (inDetailedSection) {
+                    detailedSectionLines.push(line);
+                    continue;
+                }
+
                 // Stop when we hit a file-specific section (## followed by a file path)
                 // But keep the sections we want: "## Diff:" and "## Summary"
                 if (line.startsWith('## ') && 
                     !line.startsWith('## Diff:') && 
-                    !line.startsWith('## Summary') &&
-                    line.includes('.')) {
-                  inDetailedSection = true;
-                  break;
+                    !line.startsWith('## Summary')) {
+                    inDetailedSection = true;
+                    detailedSectionLines.push(line);
+                    continue;
                 }
-                
-                // Skip if we're in detailed section
-                if (inDetailedSection) continue;
+
                 
                 // Clean up the diff line to be more concise
                 let cleanedLine = line;
                 if (line.startsWith('## Diff: ') && line.includes(', staged and unstaged changes')) {
                   // Extract just the branch comparison part
-                  const match = line.match(/## Diff: (.+?), staged and unstaged changes/);
+                  const match = line.match(/## (.+?), staged and unstaged changes/);
                   if (match) {
                     cleanedLine = `## ${match[1]}`;
                   }
@@ -118,6 +125,8 @@ jobs:
               }
               
               diffCoverageContent = summaryLines.join('\n').trim();
+
+              diffCoverageContent += `\n\n<details>\n<summary>📊 Detailed Coverage Report</summary>\n\n${detailedSectionLines.join('\n')}\n</details>`
             } catch (error) {
               console.log('No diff coverage report found');
             }
@@ -142,15 +151,13 @@ jobs:
             ${diffCoverageContent || 'No diff coverage data available'}
 
             📁 **Artifacts:**
-            - [HTML Coverage Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            - [Diff Coverage Report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            - [📊 HTML Coverage Report](${{ steps.upload-html-coverage.outputs.artifact-url }}) - Interactive coverage report
+            ${github.event_name === 'pull_request' ? `- [📈 Diff Coverage Report](${{ steps.upload-diff-coverage.outputs.artifact-url }}) - Detailed diff analysis` : '- 📈 Diff Coverage Report (available on PRs only)'}
 
             <details>
-            <summary>How to download coverage reports</summary>
+            <summary>📥 How to download coverage reports</summary>
 
-            1. Go to the [Actions run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            2. Scroll down to "Artifacts" 
-            3. Download the coverage reports you need
+            Click the artifact links above to download directly, or visit the [full Actions run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) to see all artifacts.
             </details>`;
 
             // Find existing coverage comment
