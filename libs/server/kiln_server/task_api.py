@@ -105,7 +105,7 @@ def connect_task_api(app: FastAPI):
 
     # dummy endpoint to test coverage
     @app.get("/api/projects/{project_id}/tasks/{task_id}/fake_endpoint")
-    async def fake_endpoint(project_id: str, task_id: str) -> str:
+    async def fake_endpoint() -> str:
         for i in range(100):
             print(f"Hello, world! {i}")
 

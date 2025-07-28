@@ -512,5 +512,5 @@ def test_fake_endpoint(client, project_and_task):
 
     response = client.get(f"/api/projects/{project.id}/tasks/{task.id}/fake_endpoint")
 
-    assert response.status_code == 200
-    assert response.json() == "Hello, world!"
+    assert response.status_code == 400
+    assert response.json()["message"] == "This is a test error"
