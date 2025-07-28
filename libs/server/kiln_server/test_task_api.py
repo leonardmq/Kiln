@@ -3,12 +3,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from kiln_ai.datamodel import (
-    Project,
-    Task,
-    TaskRequirement,
-)
-
+from kiln_ai.datamodel import Project, Task, TaskRequirement
 from kiln_server.custom_errors import connect_custom_errors
 from kiln_server.task_api import connect_task_api, task_from_id
 
@@ -510,3 +505,12 @@ def test_get_rating_options_duplicate_requirements(client, project_and_task):
     assert option["requirement"]["name"] == "Duplicate Score"
     assert option["show_for_all"] is False
     assert set(option["show_for_tags"]) == {"golden_set1", "golden_set2"}
+
+
+def test_fake_endpoint(client, project_and_task):
+    project, task = project_and_task
+
+    response = client.get(f"/api/projects/{project.id}/tasks/{task.id}/fake_endpoint")
+
+    assert response.status_code == 200
+    assert response.json() == "Hello, world!"

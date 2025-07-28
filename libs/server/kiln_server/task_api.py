@@ -120,6 +120,14 @@ def connect_task_api(app: FastAPI):
         z = x + y
         z = z + "!"
 
+        object = {"x": 1}
+
+        if object["x"] == 1:
+            raise HTTPException(
+                status_code=400,
+                detail="This is a test error",
+            )
+
         if z == "BobAlice!":
             raise HTTPException(
                 status_code=400,
