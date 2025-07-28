@@ -100,6 +100,11 @@ jobs:
                     continue;
                 }
 
+                // Skip giant redundant header
+                if (line === '# Diff Coverage') {
+                  continue;
+                }
+
                 // Stop when we hit a file-specific section (## followed by a file path)
                 // But keep the sections we want: "## Diff:" and "## Summary"
                 if (line.startsWith('## ') && 
@@ -125,8 +130,16 @@ jobs:
               }
               
               diffCoverageContent = summaryLines.join('\n').trim();
+              
+              // Github PR comment limit is 65536 characters - we truncate the detailed section to fit
+              const detailedSectionLinesString = detailedSectionLines.join('\n');
+              const detailedSectionLinesMaxChars = 65536 - diffCoverageContent.length - 10000; // 10000 is arbitrary slack to make sure it fits
+              if (detailedSectionLinesString.length > detailedSectionLinesMaxChars) {
+                detailedSectionLines = detailedSectionLinesString.slice(0, detailedSectionLinesMaxChars);
+                detailedSectionLines.push('... (truncated - see full report for details) ...');
+              }
 
-              diffCoverageContent += `\n\n<details>\n<summary>📊 Detailed Coverage Report</summary>\n\n${detailedSectionLines.join('\n')}\n</details>`
+              diffCoverageContent += `\n\n<details>\n<summary>Line-by-line diff coverage</summary>\n\n${detailedSectionLines.join('\n')}\n</details>`
             } catch (error) {
               console.log('No diff coverage report found');
             }
@@ -150,15 +163,11 @@ jobs:
 
             ${diffCoverageContent || 'No diff coverage data available'}
 
-            📁 **Artifacts:**
-            - [📊 HTML Coverage Report](${{ steps.upload-html-coverage.outputs.artifact-url }}) - Interactive coverage report
-            ${github.event_name === 'pull_request' ? `- [📈 Diff Coverage Report](${{ steps.upload-diff-coverage.outputs.artifact-url }}) - Detailed diff analysis` : '- 📈 Diff Coverage Report (available on PRs only)'}
-
-            <details>
-            <summary>📥 How to download coverage reports</summary>
-
-            Click the artifact links above to download directly, or visit the [full Actions run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) to see all artifacts.
-            </details>`;
+            ---
+            [📊 HTML Coverage Report](${{ steps.upload-html-coverage.outputs.artifact-url }}) - Interactive coverage report
+            [📈 Diff Coverage Report](${{ steps.upload-diff-coverage.outputs.artifact-url }}) - Detailed diff analysis`
+            [Actions run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            `;
 
             // Find existing coverage comment
             const { data: comments } = await github.rest.issues.listComments({
