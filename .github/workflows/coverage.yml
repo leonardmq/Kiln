@@ -82,7 +82,42 @@ jobs:
             // Read diff coverage markdown if it exists
             let diffCoverageContent = '';
             try {
-              diffCoverageContent = fs.readFileSync('diff-coverage.md', 'utf8');
+              const fullDiffCoverage = fs.readFileSync('diff-coverage.md', 'utf8');
+              
+              // Extract only the high-level sections (header, diff info, and summary)
+              // Stop before the detailed file-by-file breakdown
+              const lines = fullDiffCoverage.split('\n');
+              const summaryLines = [];
+              let inDetailedSection = false;
+              
+              for (const line of lines) {
+                // Stop when we hit a file-specific section (## followed by a file path)
+                // But keep the sections we want: "## Diff:" and "## Summary"
+                if (line.startsWith('## ') && 
+                    !line.startsWith('## Diff:') && 
+                    !line.startsWith('## Summary') &&
+                    line.includes('.')) {
+                  inDetailedSection = true;
+                  break;
+                }
+                
+                // Skip if we're in detailed section
+                if (inDetailedSection) continue;
+                
+                // Clean up the diff line to be more concise
+                let cleanedLine = line;
+                if (line.startsWith('## Diff: ') && line.includes(', staged and unstaged changes')) {
+                  // Extract just the branch comparison part
+                  const match = line.match(/## Diff: (.+?), staged and unstaged changes/);
+                  if (match) {
+                    cleanedLine = `## ${match[1]}`;
+                  }
+                }
+                
+                summaryLines.push(cleanedLine);
+              }
+              
+              diffCoverageContent = summaryLines.join('\n').trim();
             } catch (error) {
               console.log('No diff coverage report found');
             }
