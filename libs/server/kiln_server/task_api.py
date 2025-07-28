@@ -3,8 +3,9 @@ from typing import Any, Dict, List
 
 from fastapi import FastAPI, HTTPException
 from kiln_ai.datamodel import Task, TaskRequirement
-from kiln_server.project_api import project_from_id
 from pydantic import BaseModel
+
+from kiln_server.project_api import project_from_id
 
 logger = logging.getLogger(__name__)
 
