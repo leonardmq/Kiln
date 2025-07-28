@@ -162,11 +162,11 @@ jobs:
             body += `**Overall Coverage:** ${coveragePercentage || 'Unknown'}\n\n`;
             body += `${diffCoverageContent || 'No diff coverage data available'}\n\n`;
             body += '---\n';
-            body += '[📊 HTML Coverage Report](${{ steps.upload-html-coverage.outputs.artifact-url }}) - Interactive coverage report\n';
+            body += '- [📊 HTML Coverage Report](${{ steps.upload-html-coverage.outputs.artifact-url }}) - Interactive coverage report\n';
             if ('${{ github.event_name }}' === 'pull_request') {
-              body += '[📈 Diff Coverage Report](${{ steps.upload-diff-coverage.outputs.artifact-url }}) - Detailed diff analysis\n';
+              body += '- [📈 Diff Coverage Report](${{ steps.upload-diff-coverage.outputs.artifact-url }}) - Detailed diff analysis\n';
             }
-            body += '[Github Actions Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) - View the full coverage report';
+            body += '- [Github Actions Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) - View the full coverage report';
 
             // Find existing coverage comment
             const { data: comments } = await github.rest.issues.listComments({
