@@ -80,82 +80,85 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            
+
             // Read diff coverage markdown if it exists
             let diffCoverageContent = '';
             try {
-              const fullDiffCoverage = fs.readFileSync('diff-coverage.md', 'utf8');
-              
-              // Extract only the high-level sections (header, diff info, and summary)
-              // Stop before the detailed file-by-file breakdown
-              const lines = fullDiffCoverage.split('\n');
-              const summaryLines = [];
-              let inDetailedSection = false;
-              let detailedSectionLines = [];
-              
-              for (const line of lines) {
+                const fullDiffCoverage = fs.readFileSync('diff-coverage.md', 'utf8');
 
-                if (inDetailedSection) {
-                    detailedSectionLines.push(line);
-                    continue;
+                // Extract only the high-level sections (header, diff info, and summary)
+                // Stop before the detailed file-by-file breakdown
+                const lines = fullDiffCoverage.split('\n');
+                const summaryLines = [];
+                let inDetailedSection = false;
+                let detailedSectionLines = [];
+
+                for (const line of lines) {
+                    if (inDetailedSection) {
+                        detailedSectionLines.push(line);
+                        continue;
+                    }
+
+                    // Skip giant redundant header
+                    if (line === '# Diff Coverage') {
+                        continue;
+                    }
+
+                    // Stop when we hit a file-specific section (## followed by a file path)
+                    // But keep the sections we want: "## Diff:" and "## Summary"
+                    if (line.startsWith('## ') &&
+                        !line.startsWith('## Diff:') &&
+                        !line.startsWith('## Summary')) {
+                        inDetailedSection = true;
+                        detailedSectionLines.push(line);
+                        continue;
+                    }
+
+
+                    // Clean up the diff line to be more concise
+                    let cleanedLine = line;
+                    if (line.startsWith('## Diff: ') && line.includes(', staged and unstaged changes')) {
+                        // Extract just the branch comparison part
+                        const match = line.match(/## (.+?), staged and unstaged changes/);
+                        if (match) {
+                            cleanedLine = `## ${match[1]}`;
+                        }
+                    }
+
+                    summaryLines.push(cleanedLine);
                 }
 
-                // Skip giant redundant header
-                if (line === '# Diff Coverage') {
-                  continue;
+                diffCoverageContent = summaryLines.join('\n').trim();
+
+                // Github PR comment limit is 65536 characters - we truncate the detailed section to fit
+                let detailedSectionString = detailedSectionLines.join('\n');
+                const detailedSectionLinesMaxChars = 65536 - diffCoverageContent.length - 10000; // 10000 is arbitrary slack to make sure it fits
+                if (detailedSectionString.length > detailedSectionLinesMaxChars) {
+                    detailedSectionString = detailedSectionString.slice(0, detailedSectionLinesMaxChars) + '\n\n... (truncated - see full report for details) ...';
                 }
 
-                // Stop when we hit a file-specific section (## followed by a file path)
-                // But keep the sections we want: "## Diff:" and "## Summary"
-                if (line.startsWith('## ') && 
-                    !line.startsWith('## Diff:') && 
-                    !line.startsWith('## Summary')) {
-                    inDetailedSection = true;
-                    detailedSectionLines.push(line);
-                    continue;
+                if (detailedSectionLines.length > 0) {
+                    diffCoverageContent += `\n\n## Line-by-line\n\n<details>\n<summary>View line-by-line diff coverage</summary>\n\n${detailedSectionString}\n</details>`;
                 }
-
-                
-                // Clean up the diff line to be more concise
-                let cleanedLine = line;
-                if (line.startsWith('## Diff: ') && line.includes(', staged and unstaged changes')) {
-                  // Extract just the branch comparison part
-                  const match = line.match(/## (.+?), staged and unstaged changes/);
-                  if (match) {
-                    cleanedLine = `## ${match[1]}`;
-                  }
-                }
-                
-                summaryLines.push(cleanedLine);
-              }
-              
-              diffCoverageContent = summaryLines.join('\n').trim();
-              
-                          // Github PR comment limit is 65536 characters - we truncate the detailed section to fit
-            let detailedSectionString = detailedSectionLines.join('\n');
-            const detailedSectionLinesMaxChars = 65536 - diffCoverageContent.length - 10000; // 10000 is arbitrary slack to make sure it fits
-            if (detailedSectionString.length > detailedSectionLinesMaxChars) {
-              detailedSectionString = detailedSectionString.slice(0, detailedSectionLinesMaxChars) + '\n\n... (truncated - see full report for details) ...';
-            }
-
-            if (detailedSectionLines.length > 0) {
-              diffCoverageContent += `\n\n## Line-by-line diff coverage\n\n<details>\n<summary>View line-by-line diff coverage</summary>\n\n${detailedSectionString}\n</details>`;
-            }
             } catch (error) {
-              console.log('No diff coverage report found');
+                console.log('No diff coverage report found');
             }
-            
+
             // Get overall coverage percentage
-            const { execSync } = require('child_process');
+            const {
+                execSync
+            } = require('child_process');
             let coveragePercentage = '';
             try {
-              const output = execSync('uv run coverage report --format=text', { encoding: 'utf8' });
-              const match = output.match(/TOTAL\s+\d+\s+\d+\s+(\d+%)/);
-              if (match) {
-                coveragePercentage = match[1];
-              }
+                const output = execSync('uv run coverage report --format=text', {
+                    encoding: 'utf8'
+                });
+                const match = output.match(/TOTAL\s+\d+\s+\d+\s+(\d+%)/);
+                if (match) {
+                    coveragePercentage = match[1];
+                }
             } catch (error) {
-              console.log('Could not extract coverage percentage');
+                console.log('Could not extract coverage percentage');
             }
 
             let body = '## 📊 Coverage Report\n\n';
@@ -164,37 +167,39 @@ jobs:
             body += '---\n';
             body += '- [📊 HTML Coverage Report](${{ steps.upload-html-coverage.outputs.artifact-url }}) - Interactive coverage report\n';
             if ('${{ github.event_name }}' === 'pull_request') {
-              body += '- [📈 Diff Coverage Report](${{ steps.upload-diff-coverage.outputs.artifact-url }}) - Detailed diff analysis\n';
+                body += '- [📈 Diff Coverage Report](${{ steps.upload-diff-coverage.outputs.artifact-url }}) - Detailed diff analysis\n';
             }
             body += '- [Github Actions Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) - View the full coverage report';
 
             // Find existing coverage comment
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-
-            const existingComment = comments.find(comment => 
-              comment.body.includes('📊 Coverage Report')
-            );
-
-            if (existingComment) {
-              // Update existing comment
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existingComment.id,
-                body: body
-              });
-            } else {
-              // Create new comment
-              await github.rest.issues.createComment({
+            const {
+                data: comments
+            } = await github.rest.issues.listComments({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: body
-              });
+            });
+
+            const existingComment = comments.find(comment =>
+                comment.body.includes('📊 Coverage Report')
+            );
+
+            if (existingComment) {
+                // Update existing comment
+                await github.rest.issues.updateComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: existingComment.id,
+                    body: body
+                });
+            } else {
+                // Create new comment
+                await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: context.issue.number,
+                    body: body
+                });
             }
 
       - name: Coverage Summary
