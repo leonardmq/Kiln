@@ -1,15 +1,19 @@
 name: Coverage Report
 
 on:
-  pull_request:
-    branches: [ main ]
-  push:
-    branches: [ main ]
+    pull_request:
+    push:
+        branches: [ main ]
 
 jobs:
   coverage:
     name: Generate Coverage Report
     runs-on: ubuntu-latest
+    permissions:
+      contents: read          # To checkout the code
+      pull-requests: write    # To comment on PRs
+      issues: write          # To comment on issues (PRs are issues)
+      actions: read          # To read workflow artifacts
 
     steps:
       - uses: actions/checkout@v4
@@ -27,10 +31,6 @@ jobs:
 
       - name: Install the project
         run: uv sync --all-extras --dev
-
-      # Remove this later: needed as server expects this dir to exist
-    #   - name: Mock Studio Web UI
-    #     run: mkdir -p ./app/web_ui/build && echo "test" > ./app/web_ui/build/index.html
 
       - name: Run coverage
         run: |
@@ -57,11 +57,12 @@ jobs:
       - name: Generate diff coverage report (PR only)
         if: github.event_name == 'pull_request'
         run: |
-          # Generate diff coverage report
-          uv run diff-cover coverage.xml --compare-branch=origin/main --html-report diff-coverage.html --markdown-report diff-coverage.md
+          # Generate diff coverage reports
+          uv run diff-cover coverage.xml --compare-branch=origin/${{ github.event.pull_request.base.ref }} --format markdown:diff-coverage.md
+          uv run diff-cover coverage.xml --compare-branch=origin/${{ github.event.pull_request.base.ref }} --format html:diff-coverage.html
           
           # Also generate a fail-under report for potential future use
-          uv run diff-cover coverage.xml --compare-branch=origin/main --fail-under=80 || echo "Diff coverage below 80%"
+          uv run diff-cover coverage.xml --compare-branch=origin/${{ github.event.pull_request.base.ref }} --fail-under=80 || echo "Diff coverage below 80%"
 
       - name: Upload diff coverage report
         if: github.event_name == 'pull_request'
@@ -77,6 +78,7 @@ jobs:
       - name: Comment PR with coverage info
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
+        continue-on-error: true  # Don't fail the workflow if we can't comment (e.g., from forks)
         with:
           script: |
             const fs = require('fs');
@@ -184,22 +186,29 @@ jobs:
                 comment.body.includes('📊 Coverage Report')
             );
 
-            if (existingComment) {
-                // Update existing comment
-                await github.rest.issues.updateComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    comment_id: existingComment.id,
-                    body: body
-                });
-            } else {
-                // Create new comment
-                await github.rest.issues.createComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    issue_number: context.issue.number,
-                    body: body
-                });
+            try {
+              if (existingComment) {
+                  // Update existing comment
+                  await github.rest.issues.updateComment({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      comment_id: existingComment.id,
+                      body: body
+                  });
+                  console.log('Updated existing coverage comment');
+              } else {
+                  // Create new comment
+                  await github.rest.issues.createComment({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      issue_number: context.issue.number,
+                      body: body
+                  });
+                  console.log('Created new coverage comment');
+              }
+            } catch (error) {
+                console.log('Failed to comment on PR (likely due to permissions from fork):', error.message);
+                console.log('Coverage reports are still available as artifacts');
             }
 
       - name: Coverage Summary
@@ -207,4 +216,4 @@ jobs:
           echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           uv run coverage report >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY 
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
